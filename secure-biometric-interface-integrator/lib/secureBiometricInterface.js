@@ -632,7 +632,7 @@ class SecureBiometricInterface {
 
     try {
       this.statusChanged(states.AUTHENTICATING);
-      biometricResponse = await this.sbiService.capture_Auth(
+      let rawBiometricResponse = await this.sbiService.capture_Auth(
         this.host,
         selectedDevice.port,
         this.props.transactionId,
@@ -643,12 +643,22 @@ class SecureBiometricInterface {
       this.statusChanged(states.LOADED);
       // checking if the response has error or not
 
-      if (biometricResponse?.biometrics[0]?.error?.errorCode !== "0") {
-        this.errorStateChanged({
-          errorCode: biometricResponse.biometrics[0].error.errorCode,
-          defaultMsg: biometricResponse.biometrics[0].error.errorInfo,
-        });
-        return;
+      console.log("rawBiometricResponse >>" + rawBiometricResponse);
+
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(rawBiometricResponse, "text/xml");
+      const pidElement = xmlDoc.querySelector("PidData");
+      if(pidElement) {
+         const resp = pidElement.querySelector("Resp");
+         if(resp && resp.getAttribute('errCode') !== "0") {
+                this.errorStateChanged({
+                   errorCode: resp.getAttribute('errCode'),
+                   defaultMsg: resp.getAttribute('errInfo'),
+                 });
+                 return;
+         }
+
+         biometricResponse = {"biometrics":[{"data" : rawBiometricResponse }]}
       }
     } catch (error) {
       this.statusChanged(states.LOADED);
@@ -659,6 +669,7 @@ class SecureBiometricInterface {
       return;
     }
 
+    console.log("biometricResponse >>> " + biometricResponse);
     this.props.onCapture(biometricResponse);
   }
 
@@ -705,12 +716,14 @@ class SecureBiometricInterface {
         localStorageService.getDeviceInfos() &&
         Object.keys(localStorageService.getDeviceInfos()).length > 0
       ) {
+        console.log("Devices found, so breaking loop");
         break;
       }
       // delay added before the next fetch device api call
       await new Promise((r) => setTimeout(r, this.buffertTime));
     }
 
+    console.log("Devices found, so breaking loop >>> " + localStorageService.getDeviceInfos());
     this.discoveryCancellationFlag = false;
     if (
       localStorageService.getDeviceInfos() ||

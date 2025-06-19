@@ -25,23 +25,23 @@ const DeviceStatusReady = "Ready";
 /**
  * endpoint for the biometric device
  */
-const deviceEndPoint = "/device";
-const infoEndPoint = "/info";
-const captureEndPoint = "/capture";
+const deviceEndPoint = ""; //discovery endpoint
+const infoEndPoint = "/rd/info";
+const captureEndPoint = "/rd/capture";
 
 /**
  * http method for retrieving from &
  * sending data to the biometric devices
  */
-const mosip_DiscoverMethod = "MOSIPDISC";
-const mosip_DeviceInfoMethod = "MOSIPDINFO";
+const mosip_DiscoverMethod = "RDSERVICE";
+const mosip_DeviceInfoMethod = "DEVICEINFO";
 const mosip_CaptureMethod = "CAPTURE";
 
 /**
  * Default from & till port as per SBI spec
  */
-const defaultFromPort = 4501;
-const defaultTillPort = 4600
+const defaultFromPort = 11100;
+const defaultTillPort = 11115;
 
 const BioType = {
   FACE: "Face",
@@ -64,7 +64,7 @@ class SbiService {
       fingerCaptureScore: this.nullCheckNum(sbiConfig.fingerCaptureScore, "70"),
       irisCaptureCount: this.nullCheckNum(sbiConfig.irisCaptureCount, "1"),
       irisCaptureScore: this.nullCheckNum(sbiConfig.irisCaptureScore, "70"),
-      portRange: this.nullCheckStr(sbiConfig.portRange, "4501-4600"),
+      portRange: this.nullCheckStr(sbiConfig.portRange, "11100-11115"),
       captureTimeout: this.convertToMs(sbiConfig.captureTimeout, "30000"),
       discTimeout: this.convertToMs(sbiConfig.discTimeout, "15000"),
       dinfoTimeout: this.convertToMs(sbiConfig.dinfoTimeout, "30000"),
@@ -162,27 +162,7 @@ class SbiService {
       previousHashValue = this.previousHash;
     }
 
-    let request = {
-      env: this.sbiConfig.env,
-      purpose,
-      specVersion,
-      timeout: this.sbiConfig.captureTimeout,
-      captureTime: new Date().toISOString(),
-      domainUri: this.sbiConfig.domainUri,
-      transactionId,
-      bio: [
-        {
-          type, //modality
-          count: String(getValidNumber(count, 1)), // from configuration
-          bioSubType,
-          requestedScore: String(getValidNumber(requestedScore, 70)), // from configuration
-          deviceId, // from discovery
-          deviceSubId: "0", //Set as 0, not required for Auth capture.
-          previousHash: previousHashValue, // calculated sha256 hash of empty utf-8 string
-        },
-      ],
-      customOpts: null,
-    };
+    let request = `<PidOptions ver="1.0"><Opts fCount="1" fType="0" iCount="0" iType="0" pCount="0" pType="0" format="0" pidVer="2.0" timeout="10000" posh="UNKNOWN" env="P"/></PidOptions>`
 
     let endpoint = host + ":" + port + captureEndPoint;
 
@@ -191,13 +171,9 @@ class SbiService {
       url: endpoint,
       data: request,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/xml",
       },
     });
-
-    if (response?.data?.biometrics?.[0]?.hash) {
-      this.previousHash = response.data.biometrics[0].hash;
-    }
     
     return response?.data;
   };
@@ -267,6 +243,9 @@ const discoverRequestBuilder = async (
     url: endpoint,
     data: request,
     timeout: discTimeout,
+    headers: {
+        "Content-Type": "application/xml",
+    },
   })
     .then(async (response) => {
       if (response?.data !== null) {
@@ -312,16 +291,25 @@ const mosipdinfo_DeviceInfo = async (host, port, dinfoTimeout) => {
  * @returns {Array<Object>} JWT decoded deviceInfo array
  */
 const decodeAndValidateDeviceInfo = async (deviceInfoList) => {
-  var deviceDetailList = [];
-  for (let i = 0; i < deviceInfoList.length; i++) {
-    var decodedDevice = await decodeJWT(deviceInfoList[i].deviceInfo);
-    decodedDevice.digitalId = await decodeJWT(decodedDevice.digitalId);
+    var deviceDetailList = [];
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(deviceInfoList, "text/xml");
+    const deviceInfoElement = xmlDoc.querySelector("DeviceInfo");
+    if(deviceInfoElement) {
 
-    if (validateDeviceInfo(decodedDevice)) {
-      deviceDetailList.push(decodedDevice);
+        let digitalIdMap = {"type":"Finger" ,
+                        "model": deviceInfoElement.getAttribute("mi"),
+                        "serialNo": deviceInfoElement.getAttribute("dc"),
+                        "make": deviceInfoElement.getAttribute("rdsId")};
+
+        let decodedDevice = { "specVersion" : deviceInfoElement.getAttribute("rdsVer"),
+                              "deviceId" : deviceInfoElement.getAttribute("dpId"),
+                              "digitalId" : digitalIdMap,
+                              "deviceStatus" : "Ready" };
+
+        deviceDetailList.push(decodedDevice);
     }
-  }
-  return deviceDetailList;
+   return deviceDetailList;
 };
 
 /**
