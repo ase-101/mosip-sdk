@@ -175,7 +175,22 @@ class SbiService {
       },
     });
     
-    return response?.data;
+    const encodedData = await toBase64Unicode(response?.data);
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(response?.data, "text/xml");
+        const respElement = xmlDoc.querySelector("Resp");
+        if(respElement) {
+            let capturedBio = {"biometrics": [
+                                                {   "data" : encodedData,
+                                                    "error": {  "errorCode": respElement.getAttribute("errCode"),
+                                                                "errorInfo": respElement.getAttribute("errInfo")
+                                                              }
+                                                }
+                                              ]
+                              };
+            return capturedBio;
+        }
+        return null;
   };
 
   /**
@@ -296,14 +311,24 @@ const decodeAndValidateDeviceInfo = async (deviceInfoList) => {
     const xmlDoc = parser.parseFromString(deviceInfoList, "text/xml");
     const deviceInfoElement = xmlDoc.querySelector("DeviceInfo");
     if(deviceInfoElement) {
+        const paramsMap = new Map();
+        const additionalInfo = deviceInfoElement.querySelector("additional_info");
+        const paramElements = additionalInfo.querySelectorAll('Param');
+        paramElements.forEach(param => {
+            const name = param.getAttribute('name');
+            const value = param.getAttribute('value');
+            if (name && value !== null) { // Ensure both attributes exist
+                paramsMap.set(name, value);
+            }
+        });
 
-        let digitalIdMap = {"type":"Finger" ,
-                        "model": deviceInfoElement.getAttribute("mi"),
-                        "serialNo": deviceInfoElement.getAttribute("dc"),
-                        "make": deviceInfoElement.getAttribute("rdsId")};
+        let digitalIdMap = {"type": paramsMap.get("modality_type"),
+                        "model": paramsMap.get("sysid"),
+                        "serialNo": paramsMap.get("srno"),
+                        "make": deviceInfoElement.getAttribute("dpId") };
 
-        let decodedDevice = { "specVersion" : deviceInfoElement.getAttribute("rdsVer"),
-                              "deviceId" : deviceInfoElement.getAttribute("dpId"),
+        let decodedDevice = { "specVersion" : [ deviceInfoElement.getAttribute("rdsVer") ],
+                              "deviceId" : deviceInfoElement.getAttribute("dc"),
                               "digitalId" : digitalIdMap,
                               "deviceStatus" : "Ready" };
 
@@ -348,6 +373,10 @@ const getValidNumber = (value, defaultValue) => {
   return value === null || value === undefined || isNaN(Number(value))
     ? defaultValue
     : Number(value);
+};
+
+const toBase64Unicode = (str) => {
+  return btoa(unescape(encodeURIComponent(str)));
 };
 
 export { SbiService };
