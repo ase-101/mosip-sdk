@@ -190,13 +190,15 @@ class SbiService {
         errInfo = respElement.getAttribute('errInfo');
      }
     }
-    return {"biometrics": [{   "data" : encodedData,
+    const captureResponse = {"biometrics": [{   "data" : encodedData,
                                 "error": {
                                     "errorCode": errCode,
                                     "errorInfo": errInfo
                                 }
                             }]
            };
+    console.log("Complete Capture Response: ", captureResponse);
+    return captureResponse;
   };
 
   /**
