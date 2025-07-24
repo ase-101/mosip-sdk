@@ -632,7 +632,7 @@ class SecureBiometricInterface {
 
     try {
       this.statusChanged(states.AUTHENTICATING);
-      let rawBiometricResponse = await this.sbiService.capture_Auth(
+      const biometricResponse = await this.sbiService.capture_Auth(
         this.host,
         selectedDevice.port,
         this.props.transactionId,
@@ -641,36 +641,27 @@ class SecureBiometricInterface {
         selectedDevice.deviceId
       );
       this.statusChanged(states.LOADED);
-      // checking if the response has error or not
+        // checking if the response has error or not
+      console.log("Capture Response: ", biometricResponse);
 
-      console.log("rawBiometricResponse >>" + rawBiometricResponse);
+        if (biometricResponse?.biometrics[0]?.error?.errorCode !== "0") {
+          this.errorStateChanged({
+            errorCode: biometricResponse.biometrics[0].error.errorCode,
+            defaultMsg: biometricResponse.biometrics[0].error.errorInfo,
+          });
+          return;
+        }
 
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(rawBiometricResponse, "text/xml");
-      const pidElement = xmlDoc.querySelector("PidData");
-      if(pidElement) {
-         const resp = pidElement.querySelector("Resp");
-         if(resp && resp.getAttribute('errCode') !== "0") {
-                this.errorStateChanged({
-                   errorCode: resp.getAttribute('errCode'),
-                   defaultMsg: resp.getAttribute('errInfo'),
-                 });
-                 return;
-         }
-
-         biometricResponse = {"biometrics":[{"data" : rawBiometricResponse }]}
+      } catch (error) {
+        this.statusChanged(states.LOADED);
+        this.errorStateChanged({
+          errorCode: ErrorCode.BIOMETRIC_CAPTURE_FAILED,
+          defaultMsg: "Biometric capture failed",
+        });
+        return;
       }
-    } catch (error) {
-      this.statusChanged(states.LOADED);
-      this.errorStateChanged({
-        errorCode: ErrorCode.BIOMETRIC_CAPTURE_FAILED,
-        defaultMsg: "Biometric capture failed",
-      });
-      return;
-    }
 
-    console.log("biometricResponse >>> " + biometricResponse);
-    this.props.onCapture(biometricResponse);
+      this.props.onCapture(biometricResponse);
   }
 
   /**

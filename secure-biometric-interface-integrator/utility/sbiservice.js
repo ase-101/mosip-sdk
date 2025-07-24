@@ -176,21 +176,27 @@ class SbiService {
     });
     
     const encodedData = await toBase64Unicode(response?.data);
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(response?.data, "text/xml");
-        const respElement = xmlDoc.querySelector("Resp");
-        if(respElement) {
-            let capturedBio = {"biometrics": [
-                                                {   "data" : encodedData,
-                                                    "error": {  "errorCode": respElement.getAttribute("errCode"),
-                                                                "errorInfo": respElement.getAttribute("errInfo")
-                                                              }
-                                                }
-                                              ]
-                              };
-            return capturedBio;
-        }
-        return null;
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(response?.data, "text/xml");
+    const pidElement = xmlDoc.querySelector("PidData");
+    const errCode = "error";
+    const errInfo = "Failed to get capture response";
+
+    if(pidElement) {
+     const respElement = pidElement.querySelector("Resp");
+     if(respElement) {
+        console.log("Capture Response: ", respElement);
+        errCode = respElement.getAttribute('errCode');
+        errInfo = respElement.getAttribute('errInfo');
+     }
+    }
+    return {"biometrics": [{   "data" : encodedData,
+                                "error": {
+                                    "errorCode": errCode,
+                                    "errorInfo": errInfo
+                                }
+                            }]
+           };
   };
 
   /**
