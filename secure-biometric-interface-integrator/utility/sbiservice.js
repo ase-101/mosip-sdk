@@ -179,16 +179,13 @@ class SbiService {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(response?.data, "text/xml");
     const pidElement = xmlDoc.querySelector("PidData");
-    const errCode = "error";
-    const errInfo = "Failed to get capture response";
+    let errCode = "error";
+    let errInfo = "unknown error";
 
     if(pidElement) {
      const respElement = pidElement.querySelector("Resp");
-     if(respElement) {
-        console.log("Capture Response: ", respElement);
-        errCode = respElement.getAttribute('errCode');
-        errInfo = respElement.getAttribute('errInfo');
-     }
+     errCode = respElement.getAttribute("errCode");
+     errInfo = respElement.getAttribute("errInfo");
     }
     const captureResponse = {"biometrics": [{   "data" : encodedData,
                                 "error": {
@@ -197,7 +194,6 @@ class SbiService {
                                 }
                             }]
            };
-    console.log("Complete Capture Response: ", captureResponse);
     return captureResponse;
   };
 
