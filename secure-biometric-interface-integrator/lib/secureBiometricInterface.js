@@ -632,7 +632,7 @@ class SecureBiometricInterface {
 
     try {
       this.statusChanged(states.AUTHENTICATING);
-      const biometricResponse = await this.sbiService.capture_Auth(
+      biometricResponse = await this.sbiService.capture_Auth(
         this.host,
         selectedDevice.port,
         this.props.transactionId,
@@ -660,7 +660,6 @@ class SecureBiometricInterface {
         });
         return;
       }
-
       this.props.onCapture(biometricResponse);
   }
 
